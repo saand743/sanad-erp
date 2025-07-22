@@ -1,0 +1,120 @@
+﻿import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+
+export default function BalanceSheetPage() {
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [date, setDate] = useState('');
+  const [branches, setBranches] = useState([]);
+  const [selectedBranch, setSelectedBranch] = useState('');
+
+  useEffect(() => {
+    fetchBranches();
+  }, []);
+
+  useEffect(() => {
+    if (date && selectedBranch) {
+      fetchReport(selectedBranch);
+    }
+  }, [date, selectedBranch]);
+
+  const fetchBranches = async () => {
+    try {
+      const response = await fetch('/api/branches');
+      const data = await response.json();
+      if (data.success) {
+        setBranches(data.branches);
+        setSelectedBranch(data.branches[0]?.id || '');
+      }
+    } catch (error) {
+      toast.error('فشل في جلب الفروع');
+    }
+  };
+
+  const fetchReport = async (branchId) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/reports/balance-sheet?date=${date}&branch_id=${branchId}`);
+      const data = await response.json();
+      if (data.success) {
+        setReport(data.report);
+      } else {
+        toast.error(data.error || 'فشل في جلب التقرير');
+      }
+    } catch (error) {
+      toast.error('خطأ في الشبكة عند جلب التقرير');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-bold text-gray-900">الميزانية العمومية</h1>
+      <div className="mb-4">
+        <label className="block mb-1">اختر الفرع</label>
+        <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)} className="border rounded px-3 py-2">
+          {branches.map(branch => (
+            <option key={branch.id} value={branch.id}>{branch.name}</option>
+          ))}
+        </select>
+      </div>
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="flex gap-4 mb-4">
+          <div>
+            <label className="block mb-1">تاريخ التقرير</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="border rounded px-3 py-2" />
+          </div>
+        </div>
+        {loading ? (
+          <div>جاري التحميل...</div>
+        ) : report ? (
+          <div>
+            <h2 className="text-xl font-bold mb-4">ملخص الميزانية العمومية</h2>
+            <table className="min-w-full divide-y divide-gray-200 mb-4">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البند</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">القيمة</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                <tr>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">إجمالي الأصول</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-green-700 font-bold">{report.totalAssets.toLocaleString('ar-SA')}</td>
+                </tr>
+                <tr>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">إجمالي الخصوم</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-red-700 font-bold">{report.totalLiabilities.toLocaleString('ar-SA')}</td>
+                </tr>
+                <tr>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">حقوق الملكية</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-700 font-bold">{report.totalEquity.toLocaleString('ar-SA')}</td>
+                </tr>
+              </tbody>
+            </table>
+            <h3 className="font-semibold mb-2">تفاصيل الحسابات:</h3>
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحساب</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">القيمة</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {report.details.map(acc => (
+                  <tr key={acc.code}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{acc.name_ar} ({acc.code})</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{acc.value.toLocaleString('ar-SA')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div>يرجى اختيار تاريخ لعرض التقرير.</div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,41 @@
+﻿import React, { useState } from 'react';
+
+export default function SecuritySettings() {
+  const [settings, setSettings] = useState({
+    enable2FA: false,
+    siemEndpoint: '',
+    siemApiKey: '',
+  });
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setSettings((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    // هنا يمكن ربط الإعدادات بقاعدة البيانات أو ملف إعدادات
+    alert('تم حفظ إعدادات الأمان بنجاح!');
+  };
+
+  return (
+    <div className="p-6 max-w-xl mx-auto space-y-6">
+      <h1 className="text-2xl font-bold text-gray-900 mb-4">إعدادات الأمان</h1>
+      <form onSubmit={handleSave} className="space-y-4 bg-white rounded-lg shadow p-6">
+        <div className="flex items-center gap-2">
+          <input type="checkbox" name="enable2FA" checked={settings.enable2FA} onChange={handleChange} />
+          <label className="block">تفعيل التوثيق الثنائي (2FA)</label>
+        </div>
+        <div>
+          <label className="block mb-1">SIEM Endpoint</label>
+          <input name="siemEndpoint" value={settings.siemEndpoint} onChange={handleChange} className="border rounded px-3 py-2 w-full" />
+        </div>
+        <div>
+          <label className="block mb-1">SIEM API Key</label>
+          <input name="siemApiKey" value={settings.siemApiKey} onChange={handleChange} className="border rounded px-3 py-2 w-full" />
+        </div>
+        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">حفظ إعدادات الأمان</button>
+      </form>
+    </div>
+  );
+}

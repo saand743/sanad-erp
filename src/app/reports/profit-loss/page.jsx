@@ -1,0 +1,199 @@
+import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+import { logActivity } from '@/app/api/audit-log/service';
+import { FaFilePdf } from 'react-icons/fa';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+const translations = {
+  ar: {
+    title: ' ﬁ—Ì— «·√—»«Õ Ê«·Œ”«∆—',
+    branch: '«·›—⁄',
+    from: '„‰  «—ÌŒ',
+    to: '≈·Ï  «—ÌŒ',
+    exportPDF: ' ’œÌ— PDF',
+    loading: 'Ã«—Ì «· Õ„Ì·...',
+    revenue: '≈Ã„«·Ì «·≈Ì—«œ« ',
+    expense: '≈Ã„«·Ì «·„’—Ê›« ',
+    netProfit: '’«›Ì «·—»Õ / («·Œ”«—…)',
+    details: ' ›«’Ì· «·Õ”«»« ',
+    name: '«”„ «·Õ”«»',
+    revenueCol: '«·≈Ì—«œ',
+    expenseCol: '«·„’—Ê›',
+    noData: '·«  ÊÃœ »Ì«‰«  ·Â–« «·‰ÿ«ﬁ.'
+  },
+  en: {
+    title: 'Profit & Loss Report',
+    branch: 'Branch',
+    from: 'From Date',
+    to: 'To Date',
+    exportPDF: 'Export PDF',
+    loading: 'Loading...',
+    revenue: 'Total Revenue',
+    expense: 'Total Expense',
+    netProfit: 'Net Profit / (Loss)',
+    details: 'Account Details',
+    name: 'Account Name',
+    revenueCol: 'Revenue',
+    expenseCol: 'Expense',
+    noData: 'No data for this range.'
+  }
+};
+
+export default function ProfitLossReportPage() {
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState({ from: '', to: '' });
+  const [branches, setBranches] = useState([]);
+  const [selectedBranch, setSelectedBranch] = useState('');
+  const [language, setLanguage] = useState('ar');
+  const t = translations[language];
+
+  useEffect(() => {
+    fetchBranches();
+  }, []);
+
+  useEffect(() => {
+    if (dateRange.from && dateRange.to && selectedBranch) {
+      fetchReport(selectedBranch);
+    }
+  }, [dateRange, selectedBranch]);
+
+  const fetchBranches = async () => {
+    try {
+      const response = await fetch('/api/branches');
+      const data = await response.json();
+      if (data.success) {
+        setBranches(data.branches);
+        setSelectedBranch(data.branches[0]?.id || '');
+      }
+    } catch (error) {
+      toast.error('›‘· ›Ì Ã·» «·›—Ê⁄');
+    }
+  };
+
+  const fetchReport = async (branchId) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/reports/profit-loss?from=${dateRange.from}&to=${dateRange.to}&branch_id=${branchId}`);
+      const data = await response.json();
+      if (data.success) {
+        setReport(data.report);
+
+        //  ”ÃÌ· «·‰‘«ÿ ›Ì ”Ã· «· œﬁÌﬁ
+        await logActivity({
+          user_id: 1, // «” »œ· »„⁄—› «·„” Œœ„ «·›⁄·Ì
+          user_name: 'Admin', // «” »œ· »«”„ «·„” Œœ„ «·›⁄·Ì
+          action: 'VIEW_PROFIT_LOSS_REPORT',
+          entity_type: 'Report',
+          entity_id: null,
+          details: ` „ ⁄—÷  ﬁ—Ì— «·√—»«Õ Ê«·Œ”«∆— ··›—⁄ ${branchId} „‰ ${dateRange.from} ≈·Ï ${dateRange.to}`
+        });
+      } else {
+        toast.error(data.error || '›‘· ›Ì Ã·» «· ﬁ—Ì—');
+      }
+    } catch (error) {
+      toast.error('Œÿ√ ›Ì «·‘»ﬂ… ⁄‰œ Ã·» «· ﬁ—Ì—');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportPDF = () => {
+    window.print(); // Ì„ﬂ‰ ·«Õﬁ« «” Œœ«„ „ﬂ »… jsPDF ·· ’œÌ— «·«Õ —«›Ì
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
+        <select value={language} onChange={e => setLanguage(e.target.value)} className="border rounded px-3 py-2">
+          <option value="ar">«·⁄—»Ì…</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+      <div className="mb-4">
+        <label className="block mb-1">{t.branch}</label>
+        <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)} className="border rounded px-3 py-2">
+          {branches.map(branch => (
+            <option key={branch.id} value={branch.id}>{branch.name}</option>
+          ))}
+        </select>
+      </div>
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="flex gap-4 mb-4 items-center">
+          <div>
+            <label className="block mb-1">{t.from}</label>
+            <input type="date" value={dateRange.from} onChange={e => setDateRange(r => ({ ...r, from: e.target.value }))} className="border rounded px-3 py-2" />
+          </div>
+          <div>
+            <label className="block mb-1">{t.to}</label>
+            <input type="date" value={dateRange.to} onChange={e => setDateRange(r => ({ ...r, to: e.target.value }))} className="border rounded px-3 py-2" />
+          </div>
+          <button onClick={handleExportPDF} className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center gap-2">
+            <FaFilePdf />
+            <span>{t.exportPDF}</span>
+          </button>
+        </div>
+        {loading ? (
+          <div>{t.loading}</div>
+        ) : report ? (
+          <div>
+            <h2 className="text-xl font-bold mb-4">{t.revenue} - {t.expense} - {t.netProfit}</h2>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={[{ name: t.revenue, value: report.totalRevenue }, { name: t.expense, value: report.totalExpense }, { name: t.netProfit, value: report.netProfit }]}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip formatter={(value) => `${Number(value).toLocaleString()} —.”`} />
+                <Bar dataKey="value" fill="#10b981" name="«·ﬁÌ„…" />
+              </BarChart>
+            </ResponsiveContainer>
+            <table className="min-w-full divide-y divide-gray-200 mb-4 mt-6">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">«·»‰œ</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">«·ﬁÌ„…</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                <tr>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{t.revenue}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-green-700 font-bold">{report.totalRevenue.toLocaleString('ar-SA')}</td>
+                </tr>
+                <tr>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{t.expense}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-red-700 font-bold">{report.totalExpense.toLocaleString('ar-SA')}</td>
+                </tr>
+                <tr>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">{t.netProfit} / («·Œ”«—…)</td>
+                  <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${report.netProfit >= 0 ? 'text-green-900' : 'text-red-900'}`}>{report.netProfit.toLocaleString('ar-SA')}</td>
+                </tr>
+              </tbody>
+            </table>
+            <h3 className="font-semibold mb-2">{t.details}:</h3>
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.name}</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.revenueCol}</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.expenseCol}</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {report.details.map(acc => (
+                  <tr key={acc.code}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{acc.name_ar} ({acc.code})</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-700">{acc.revenue.toLocaleString('ar-SA')}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-700">{acc.expense.toLocaleString('ar-SA')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div>{t.noData}</div>
+        )}
+      </div>
+    </div>
+  );
+}

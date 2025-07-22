@@ -1,0 +1,144 @@
+-- PostgreSQL schema for Sanad ERP System
+-- This script creates all necessary tables for the application.
+
+-- 1. Users Table
+-- Stores user accounts, credentials, and permissions.
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    full_name VARCHAR(255) NOT NULL,
+    username VARCHAR(100) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    permissions JSONB, -- Example: {"sales": ["read", "create"], "inventory": ["read"]}
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. Customers Table
+-- Stores customer information.
+CREATE TABLE customers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE,
+    phone VARCHAR(50),
+    address TEXT,
+    tax_number VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. Suppliers Table
+-- Stores supplier information.
+CREATE TABLE suppliers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE,
+    phone VARCHAR(50),
+    address TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4. Products Table
+-- Stores product details and stock levels.
+CREATE TABLE products (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    product_code VARCHAR(100) UNIQUE,
+    description TEXT,
+    purchase_price DECIMAL(10, 2) NOT NULL,
+    sale_price DECIMAL(10, 2) NOT NULL,
+    current_stock INT NOT NULL DEFAULT 0,
+    reorder_level INT DEFAULT 10,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 5. Sales Invoices Table
+-- Main table for sales invoices.
+CREATE TABLE sales_invoices (
+    id SERIAL PRIMARY KEY,
+    invoice_number VARCHAR(100) UNIQUE,
+    customer_id INT REFERENCES customers(id),
+    invoice_date DATE NOT NULL,
+    total_amount DECIMAL(12, 2) NOT NULL,
+    status VARCHAR(50) DEFAULT 'paid', -- e.g., 'paid', 'due', 'cancelled'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 6. Sales Invoice Items Table
+-- Stores individual items for each sales invoice.
+CREATE TABLE sales_invoice_items (
+    id SERIAL PRIMARY KEY,
+    sales_invoice_id INT REFERENCES sales_invoices(id) ON DELETE CASCADE,
+    product_id INT REFERENCES products(id),
+    quantity INT NOT NULL,
+    unit_price DECIMAL(10, 2) NOT NULL,
+    total_price DECIMAL(12, 2) NOT NULL
+);
+
+-- 7. Purchase Invoices Table
+-- Main table for purchase invoices.
+CREATE TABLE purchase_invoices (
+    id SERIAL PRIMARY KEY,
+    invoice_number VARCHAR(100),
+    supplier_id INT REFERENCES suppliers(id),
+    invoice_date DATE NOT NULL,
+    total_amount DECIMAL(12, 2) NOT NULL,
+    status VARCHAR(50) DEFAULT 'received', -- e.g., 'received', 'ordered'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 8. Purchase Invoice Items Table
+-- Stores individual items for each purchase invoice.
+CREATE TABLE purchase_invoice_items (
+    id SERIAL PRIMARY KEY,
+    purchase_invoice_id INT REFERENCES purchase_invoices(id) ON DELETE CASCADE,
+    product_id INT REFERENCES products(id),
+    quantity INT NOT NULL,
+    unit_price DECIMAL(10, 2) NOT NULL,
+    total_price DECIMAL(12, 2) NOT NULL
+);
+
+-- 9. Treasury Transactions Table (Cash & Bank)
+-- For tracking income and expenses in the treasury.
+CREATE TABLE treasury_transactions (
+    id SERIAL PRIMARY KEY,
+    description TEXT NOT NULL,
+    amount DECIMAL(12, 2) NOT NULL,
+    type VARCHAR(50) NOT NULL, -- 'income' or 'expense'
+    transaction_date DATE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 10. Accounts Table (‘Ã—… «·Õ”«»« )
+CREATE TABLE accounts (
+    id SERIAL PRIMARY KEY,
+    parent_id INT REFERENCES accounts(id) ON DELETE SET NULL,
+    code VARCHAR(50) UNIQUE NOT NULL,
+    name_ar VARCHAR(255) NOT NULL,
+    name_en VARCHAR(255),
+    type VARCHAR(50) NOT NULL, -- 'asset', 'liability', 'equity', 'revenue', 'expense'
+    is_active BOOLEAN DEFAULT TRUE,
+    level INT DEFAULT 1,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 11. Journal Entries Table (ﬁÌÊœ «·ÌÊ„Ì…)
+CREATE TABLE journal_entries (
+    id SERIAL PRIMARY KEY,
+    entry_number VARCHAR(100) UNIQUE NOT NULL,
+    entry_date DATE NOT NULL,
+    description TEXT,
+    created_by INT REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 12. Journal Entry Lines Table ( ›«’Ì· «·ﬁÌœ)
+CREATE TABLE journal_entry_lines (
+    id SERIAL PRIMARY KEY,
+    journal_entry_id INT REFERENCES journal_entries(id) ON DELETE CASCADE,
+    account_id INT REFERENCES accounts(id),
+    description TEXT,
+    debit DECIMAL(12,2) DEFAULT 0,
+    credit DECIMAL(12,2) DEFAULT 0
+);

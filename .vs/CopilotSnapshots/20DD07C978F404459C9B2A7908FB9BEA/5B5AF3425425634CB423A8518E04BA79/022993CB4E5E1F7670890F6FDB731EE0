@@ -1,0 +1,91 @@
+﻿'use client';
+
+import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+import { FaPlus, FaEdit, FaTrash, FaPrint, FaEye, FaSpinner, FaLock } from 'react-icons/fa';
+import useAuth from '@/hooks/useAuth';
+
+function AccessDenied({ requiredPermission }) {
+    return (
+        <div className="flex flex-col items-center justify-center h-full p-12 bg-gray-50 rounded-lg text-center">
+            <FaLock className="text-5xl text-red-400 mb-4" />
+            <h2 className="text-2xl font-bold text-gray-800">وصول مرفوض</h2>
+            <p className="text-gray-600 mt-2">ليس لديك الصلاحيات اللازمة لعرض هذه الصفحة.</p>
+            {requiredPermission && (
+                <div className="mt-4 bg-red-100 text-red-700 text-sm font-mono p-2 rounded">
+                    الصلاحية المطلوبة: {requiredPermission}
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default function SalesPage() {
+    const { user, hasPermission, loading: authLoading, token } = useAuth();
+    const [invoices, setInvoices] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!authLoading && hasPermission('sales.view')) {
+            fetchInvoices();
+        } else if (!authLoading) {
+            setLoading(false);
+        }
+    }, [authLoading, hasPermission, token]);
+
+    const fetchInvoices = async () => {
+        setLoading(true);
+        try {
+            const response = await fetch('/api/sales', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            if (data.success) {
+                setInvoices(data.invoices);
+            } else {
+                toast.error(data.error || 'فشل في جلب الفواتير.');
+            }
+        } catch (error) {
+            toast.error('خطأ في الشبكة عند جلب الفواتير.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (authLoading || loading) {
+        return <div className="flex justify-center items-center h-96"><FaSpinner className="animate-spin text-4xl text-blue-500" /></div>;
+    }
+
+    if (!hasPermission('sales.view')) {
+        return <div className="p-6"><AccessDenied requiredPermission="sales.view" /></div>;
+    }
+
+    return (
+        <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+                <h1 className="text-2xl font-bold text-gray-900">إدارة المبيعات</h1>
+                {hasPermission('sales.create') && (
+                    <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2">
+                        <FaPlus /><span>فاتورة جديدة</span>
+                    </button>
+                )}
+            </div>
+
+            <div className="bg-white rounded-lg shadow overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">رقم الفاتورة</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">العميل</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الإجمالي</th>
+                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {invoices.map((invoice) => (
+                            <tr key={invoice.id}>
+                                         </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {invoices.map((invoice) => (
+                            <tr key={invoice.id}>
+           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray

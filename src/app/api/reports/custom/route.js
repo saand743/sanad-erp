@@ -1,0 +1,75 @@
+import { db } from '@/lip/db';
+import { NextResponse } from 'next/server';
+
+/**
+ * @description مولد استعلام لتقرير ملخص المبيعات
+ * @param {object} options - خيارات التقرير
+ * @param {string} options.startDate - تاريخ البدء
+ * @param {string} options.endDate - تاريخ الانتهاء
+ * @param {Array} options.filters - فلاتر إضافية
+ * @returns {{query: string, params: Array}}
+ */
+function generateSalesSummaryQuery({ startDate, endDate, filters }) {
+    const params = [startDate, endDate];
+    let paramIndex = 3;
+    let whereClauses = ['si.invoice_date BETWEEN $1 AND $2'];
+
+    // مثال على فلتر إضافي (يمكن توسيعه مستقبلاً)
+    const customerFilter = filters.find(f => f.field === 'customer_id' && f.value);
+    if (customerFilter) {
+        whereClauses.push(`si.customer_id = $${paramIndex}`);
+        params.push(customerFilter.value);
+        paramIndex++;
+    }
+
+    const query = `
+        SELECT
+            c.name AS customer_name,
+            si.invoice_number,
+            si.invoice_date,
+            si.total_amount,
+            si.payment_status
+        FROM sales_invoices si
+        JOIN customers c ON si.customer_id = c.id
+        WHERE ${whereClauses.join(' AND ')}
+        ORDER BY si.invoice_date DESC;
+    `;
+
+    return { query, params };
+}
+
+// خريطة لأنواع التقارير والدوال الخاصة بها
+const reportHandlers = {
+    sales_summary: generateSalesSummaryQuery,
+    // يمكن إضافة أنواع تقارير أخرى هنا مستقبلاً
+};
+
+export async function POST(request) {
+    try {
+        const body = await request.json();
+        const { reportType, startDate, endDate, filters = [] } = body;
+
+        if (!reportType || !startDate || !endDate) {
+            return NextResponse.json({ success: false, error: 'البيانات المطلوبة غير مكتملة: نوع التقرير وتاريخ البدء والانتهاء.' }, { status: 400 });
+        }
+
+        const handler = reportHandlers[reportType];
+        if (!handler) {
+            return NextResponse.json({ success: false, error: 'نوع التقرير غير مدعوم.' }, { status: 400 });
+        }
+
+        const { query, params } = handler({ startDate, endDate, filters });
+        const result = await db.query(query, params);
+
+        const reportData = {
+            generatedAt: new Date().toISOString(),
+            data: result.rows,
+        };
+
+        return NextResponse.json({ success: true, report: reportData });
+
+    } catch (error) {
+        console.error('API_CUSTOM_REPORT_ERROR:', error);
+        return NextResponse.json({ success: false, error: 'حدث خطأ أثناء إنشاء التقرير المخصص.' }, { status: 500 });
+    }
+}

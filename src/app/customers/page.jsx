@@ -1,0 +1,353 @@
+'use client';
+
+import React, { useState, useEffect, useCallback } from 'react';
+import toast from 'react-hot-toast';
+import Cookies from 'js-cookie';
+import { FaSearch, FaPlus, FaChevronLeft, FaChevronRight, FaEdit, FaTrash, FaEnvelope, FaEye } from 'react-icons/fa';
+import CustomerModal from '@/components/customers/CustomerModal';
+
+const translations = {
+  ar: {
+    title: 'إدارة العملاء',
+    newCustomer: 'عميل جديد',
+    emailMarketing: 'تسويق بالبريد',
+    campaign: 'حملة تسويقية',
+    sending: 'جاري الإرسال...',
+    code: 'كود العميل',
+    name: 'الاسم',
+    phone: 'الهاتف',
+    email: 'البريد الإلكتروني',
+    address: 'العنوان',
+    actions: 'إجراءات',
+    view: 'عرض',
+    edit: 'تعديل',
+    delete: 'حذف',
+    page: 'صفحة',
+    of: 'من',
+    searchPlaceholder: 'ابحث بالاسم, الهاتف, أو الكود...'
+  },
+  en: {
+    title: 'Customer Management',
+    newCustomer: 'New Customer',
+    emailMarketing: 'Email Marketing',
+    campaign: 'Campaign',
+    sending: 'Sending...',
+    code: 'Customer Code',
+    name: 'Name',
+    phone: 'Phone',
+    email: 'Email',
+    address: 'Address',
+    actions: 'Actions',
+    view: 'View',
+    edit: 'Edit',
+    delete: 'Delete',
+    page: 'Page',
+    of: 'of',
+    searchPlaceholder: 'Search by name, phone, or code...'
+  }
+};
+
+const LoadingSkeleton = () => (
+  <div className="animate-pulse">
+    <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+    <div className="bg-white rounded-lg shadow">
+      <div className="p-4 space-y-3">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="flex justify-between items-center">
+            <div className="h-4 bg-gray-200 rounded w-1/6"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/6"></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+export default function CustomersPage() {
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1 });
+  const [page, setPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [customerToEdit, setCustomerToEdit] = useState(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [viewCustomer, setViewCustomer] = useState(null);
+  const [customerActivities, setCustomerActivities] = useState([]);
+  const [sendingCampaign, setSendingCampaign] = useState(false);
+  const [language, setLanguage] = useState('ar');
+  const t = translations[language];
+
+  const getAuthHeaders = useCallback(() => {
+    const token = Cookies.get('token');
+    if (!token) return null;
+    return { 'Authorization': `Bearer ${token}` };
+  }, []);
+
+  const fetchCustomers = useCallback(async () => {
+    setLoading(true);
+    const headers = getAuthHeaders();
+    if (!headers) {
+      toast.error("غير مصرح لك بالوصول.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/customers?page=${page}&search=${searchTerm}`, { headers });
+      const data = await response.json();
+
+      if (data.success) {
+        setCustomers(data.customers);
+        setPagination(data.pagination);
+      } else {
+        toast.error(data.error || 'فشل في جلب العملاء.');
+      }
+    } catch (error) {
+      console.error("Fetch customers error:", error);
+      toast.error('خطأ في الشبكة عند جلب العملاء.');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, searchTerm, getAuthHeaders]);
+
+  useEffect(() => {
+    fetchCustomers();
+  }, [fetchCustomers]);
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    setPage(1);
+    setSearchTerm(searchInput);
+  };
+
+  const handleAddClick = () => {
+    setCustomerToEdit(null);
+    setIsModalOpen(true);
+  };
+
+  const handleEditClick = (customer) => {
+    setCustomerToEdit(customer);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteClick = async (customerId) => {
+    if (!window.confirm('هل أنت متأكد من حذف هذا العميل؟ لا يمكن التراجع عن هذا الإجراء.')) {
+      return;
+    }
+
+    const toastId = toast.loading('جاري حذف العميل...');
+    try {
+      const headers = getAuthHeaders();
+      const response = await fetch(`/api/customers/${customerId}`, {
+        method: 'DELETE',
+        headers,
+      });
+      const data = await response.json();
+      toast.dismiss(toastId);
+
+      if (data.success) {
+        toast.success('تم حذف العميل بنجاح!');
+        fetchCustomers(); // Refresh the list
+      } else {
+        toast.error(data.error || 'فشل في حذف العميل.');
+      }
+    } catch (error) {
+      toast.dismiss(toastId);
+      console.error("Delete customer error:", error);
+      toast.error('خطأ في الشبكة عند محاولة الحذف.');
+    }
+  };
+
+  const handleModalSuccess = () => {
+    fetchCustomers();
+  };
+
+  const handleSendEmail = async () => {
+    if (!window.confirm('سيتم إرسال بريد جماعي لجميع العملاء الظاهرين في الصفحة. هل أنت متأكد؟')) return;
+    setSendingEmail(true);
+    const headers = getAuthHeaders();
+    try {
+      const response = await fetch('/api/customers/send-marketing-email', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ customerIds: customers.map(c => c.id) })
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success('تم إرسال البريد بنجاح لجميع العملاء!');
+      } else {
+        toast.error(data.error || 'فشل في إرسال البريد.');
+      }
+    } catch (error) {
+      toast.error('خطأ في الشبكة أثناء إرسال البريد.');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  const handleSendCampaign = async () => {
+    if (!window.confirm('سيتم إرسال حملة تسويقية عبر البريد لجميع العملاء الظاهرين. هل أنت متأكد؟')) return;
+    setSendingCampaign(true);
+    const headers = getAuthHeaders();
+    try {
+      const response = await fetch('/api/customers/send-campaign', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ customerIds: customers.map(c => c.id) })
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success('تم إرسال الحملة بنجاح لجميع العملاء!');
+      } else {
+        toast.error(data.error || 'فشل في إرسال الحملة.');
+      }
+    } catch (error) {
+      toast.error('خطأ في الشبكة أثناء إرسال الحملة.');
+    } finally {
+      setSendingCampaign(false);
+    }
+  };
+
+  const handleViewClick = async (customer) => {
+    setViewCustomer(customer);
+    // جلب سجل النشاطات من الـ API
+    try {
+      const headers = getAuthHeaders();
+      const response = await fetch(`/api/audit-log?entity_type=Customer&entity_id=${customer.id}`, { headers });
+      const data = await response.json();
+      if (data.success) {
+        setCustomerActivities(data.activities);
+      } else {
+        setCustomerActivities([]);
+      }
+    } catch {
+      setCustomerActivities([]);
+    }
+  };
+
+  if (loading) {
+    return <div className="p-6"><LoadingSkeleton /></div>;
+  }
+
+  return (
+    <>
+    {/* نافذة تفاصيل العميل */}
+    {viewCustomer && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
+        <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl">
+          <div className="flex justify-between items-center mb-6 border-b pb-4">
+            <h2 className="text-2xl font-bold text-gray-800">تفاصيل العميل</h2>
+            <button onClick={() => setViewCustomer(null)} className="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+          </div>
+          <div className="mb-4">
+            <div><b>الاسم:</b> {viewCustomer.name}</div>
+            <div><b>الهاتف:</b> {viewCustomer.phone}</div>
+            <div><b>البريد الإلكتروني:</b> {viewCustomer.email}</div>
+            <div><b>العنوان:</b> {viewCustomer.address}</div>
+            <div><b>الكود:</b> {viewCustomer.customer_code}</div>
+          </div>
+          <h3 className="font-bold mb-2">سجل النشاطات:</h3>
+          <div className="max-h-40 overflow-y-auto border rounded p-2 bg-gray-50">
+            {customerActivities.length === 0 ? (
+              <div className="text-gray-500">لا يوجد نشاطات لهذا العميل.</div>
+            ) : (
+              <ul className="space-y-2">
+                {customerActivities.map(act => (
+                  <li key={act.id} className="text-sm text-gray-700">
+                    <span className="font-bold">{act.action}</span> - {act.details} <span className="text-xs text-gray-400">{new Date(act.created_at).toLocaleString('ar-SA')}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+    <CustomerModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={handleModalSuccess}
+        customerToEdit={customerToEdit}
+        getAuthHeaders={getAuthHeaders}
+    />
+    <div className="p-6 space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+        <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
+        <div className="flex gap-2 w-full md:w-auto">
+          <select value={language} onChange={e => setLanguage(e.target.value)} className="border rounded px-3 py-2">
+            <option value="ar">العربية</option>
+            <option value="en">English</option>
+          </select>
+          <form onSubmit={handleSearch} className="flex-grow md:flex-grow-0">
+            <div className="relative">
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder={t.searchPlaceholder}
+                className="border border-gray-300 rounded-lg pl-10 pr-4 py-2 w-full"
+              />
+              <button type="submit" className="absolute left-3 top-1/2 -translate-y-1/2">
+                <FaSearch className="text-gray-400" />
+              </button>
+            </div>
+          </form>
+          <button onClick={handleAddClick} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+            <FaPlus />
+            <span>{t.newCustomer}</span>
+          </button>
+          <button onClick={handleSendEmail} disabled={sendingEmail || customers.length === 0} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2">
+            <FaEnvelope />
+            <span>{sendingEmail ? t.sending : t.emailMarketing}</span>
+          </button>
+          <button onClick={handleSendCampaign} disabled={sendingCampaign || customers.length === 0} className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2">
+            <FaEnvelope />
+            <span>{sendingCampaign ? t.sending : t.campaign}</span>
+          </button>
+        </div>
+      </div>
+      <div className="bg-white rounded-lg shadow overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.code}</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.name}</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.phone}</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.email}</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.address}</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">{t.actions}</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {customers.map((customer) => (
+              <tr key={customer.id}>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{customer.customer_code}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{customer.name}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500" dir="ltr">{customer.phone}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{customer.email}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{customer.address}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                  <div className="flex justify-center gap-x-4">
+                    <button onClick={() => handleViewClick(customer)} className="text-blue-600 hover:text-blue-800" title={t.view}><FaEye /></button>
+                    <button onClick={() => handleEditClick(customer)} className="text-indigo-600 hover:text-indigo-800" title={t.edit}><FaEdit /></button>
+                    <button onClick={() => handleDeleteClick(customer.id)} className="text-red-600 hover:text-red-800" title={t.delete}><FaTrash /></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex justify-center items-center gap-4">
+        <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="p-2 disabled:opacity-50"><FaChevronRight /></button>
+        <span>{t.page} {pagination.currentPage} {t.of} {pagination.totalPages}</span>
+        <button onClick={() => setPage(p => p + 1)} disabled={page >= pagination.totalPages} className="p-2 disabled:opacity-50"><FaChevronLeft /></button>
+      </div>
+    </div>
+    </>
+  );
+}

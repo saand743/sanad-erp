@@ -1,0 +1,63 @@
+	import { NextResponse } from 'next/server';
+import { z } from 'zod';
+
+// In a real app, you'd import your database client and scheduler library
+// import db from '@/lib/db';
+// import { updateBackupCronJob } from '@/lib/scheduler';
+
+// --- تنبيه هام ---
+// هذا الكود هو مثال توضيحي. في تطبيق حقيقي، ستحتاج إلى:
+// 1. التحقق من صلاحيات المستخدم (أنه مدير للنظام).
+// 2. التحقق من صحة البيانات المدخلة (Validation) بشكل دقيق.
+// 3. تخزين الإعدادات في قاعدة بيانات.
+// 4. تحديث مهمة مجدولة (Cron Job) على الخادم.
+
+const settingsSchema = z.object({
+  auto_backup: z.boolean({ required_error: "تفعيل النسخ التلقائي مطلوب" }),
+  backup_frequency: z.enum(['daily', 'weekly', 'monthly'], { errorMap: () => ({ message: "تكرار النسخ الاحتياطي يجب أن يكون يومي، أسبوعي، أو شهري" }) }),
+  backup_time: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "تنسيق الوقت غير صالح (مثال: 02:00)" }),
+  retention_days: z.number().int().positive({ message: "مدة الاحتفاظ يجب أن تكون رقماً صحيحاً موجباً" }),
+  max_backups: z.number().int().positive({ message: "الحد الأقصى للنسخ يجب أن يكون رقماً صحيحاً موجباً" }),
+});
+
+export async function POST(request) {
+  try {
+    const settings = await request.json();
+
+    // 1. التحقق من صحة البيانات باستخدام Zod
+    const validationResult = settingsSchema.safeParse(settings);
+    if (!validationResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'البيانات المدخلة غير صالحة. يرجى مراجعة الحقول.',
+          // إرجاع تفاصيل الأخطاء لكل حقل
+          errors: validationResult.error.flatten().fieldErrors,
+        },
+        { status: 400 } // Bad Request
+      );
+    }
+
+    // الآن نستخدم البيانات التي تم التحقق منها
+    const validatedSettings = validationResult.data;
+
+    // 2. حفظ الإعدادات في قاعدة البيانات (محاكاة)
+    // في تطبيق حقيقي، ستقوم بتنفيذ أمر SQL مثل:
+    // await db.query(
+    //   'UPDATE backup_settings SET auto_backup = $1, backup_frequency = $2, ... WHERE id = 1',
+    //   [validatedSettings.auto_backup, validatedSettings.backup_frequency, ...]
+    // );
+    console.log('[Backup Settings] Saving settings to database:', validatedSettings);
+
+    // 3. تحديث مهمة الجدولة على الخادم (محاكاة)
+    // هذا الجزء يعتمد بشكل كبير على بيئة الخادم. قد تستخدم node-cron, systemd timers, or a cloud service.
+    // await updateBackupCronJob(validatedSettings);
+    console.log('[Backup Settings] Updating system cron job with new schedule.');
+
+    return NextResponse.json({ success: true, message: 'تم حفظ إعدادات الجدولة بنجاح!' });
+
+  } catch (error) {
+    console.error('[API Settings Error]', error);
+    return NextResponse.json({ success: false, message: 'حدث خطأ في الخادم أثناء حفظ الإعدادات' }, { status: 500 });
+  }
+}

@@ -1,0 +1,62 @@
+﻿import React, { useState } from 'react';
+
+const translations = {
+  ar: {
+    title: 'إعدادات الأمان',
+    enable2FA: 'تفعيل التوثيق الثنائي (2FA)',
+    siemEndpoint: 'رابط نظام SIEM',
+    siemApiKey: 'مفتاح API لنظام SIEM',
+    save: 'حفظ إعدادات الأمان',
+    saved: 'تم حفظ إعدادات الأمان بنجاح!'
+  },
+  en: {
+    title: 'Security Settings',
+    enable2FA: 'Enable Two-Factor Authentication (2FA)',
+    siemEndpoint: 'SIEM Endpoint',
+    siemApiKey: 'SIEM API Key',
+    save: 'Save Security Settings',
+    saved: 'Security settings saved successfully!'
+  }
+};
+
+export default function SecuritySettings() {
+  const [settings, setSettings] = useState({
+    language: 'ar', // يمكن ربطها بإعدادات النظام لاحقاً
+    enable2FA: false,
+    siemEndpoint: '',
+    siemApiKey: '',
+  });
+
+  const t = translations[settings.language];
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setSettings((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    alert(t.saved);
+  };
+
+  return (
+    <div className="p-6 max-w-xl mx-auto space-y-6">
+      <h1 className="text-2xl font-bold text-gray-900 mb-4">{t.title}</h1>
+      <form onSubmit={handleSave} className="space-y-4 bg-white rounded-lg shadow p-6">
+        <div className="flex items-center gap-2">
+          <input type="checkbox" name="enable2FA" checked={settings.enable2FA} onChange={handleChange} />
+          <label className="block">{t.enable2FA}</label>
+        </div>
+        <div>
+          <label className="block mb-1">{t.siemEndpoint}</label>
+          <input name="siemEndpoint" value={settings.siemEndpoint} onChange={handleChange} className="border rounded px-3 py-2 w-full" />
+        </div>
+        <div>
+          <label className="block mb-1">{t.siemApiKey}</label>
+          <input name="siemApiKey" value={settings.siemApiKey} onChange={handleChange} className="border rounded px-3 py-2 w-full" />
+        </div>
+        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">{t.save}</button>
+      </form>
+    </div>
+  );
+}

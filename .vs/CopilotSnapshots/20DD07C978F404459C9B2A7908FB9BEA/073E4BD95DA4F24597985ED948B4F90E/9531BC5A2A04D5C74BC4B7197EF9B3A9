@@ -1,0 +1,52 @@
+﻿import { db } from '@/lib/db';
+import { NextResponse } from 'next/server';
+
+/**
+ * @description جلب قائمة بجميع الأدوار المتاحة في النظام
+ * @route GET /api/roles
+ */
+export async function GET(request) {
+    try {
+        const result = await db.query('SELECT * FROM roles ORDER BY created_at ASC');
+        return NextResponse.json({ success: true, roles: result.rows });
+    } catch (error) {
+        console.error('API_ROLES_GET_ERROR:', error);
+        return NextResponse.json({ success: false, error: 'حدث خطأ أثناء جلب الأدوار.' }, { status: 500 });
+    }
+}
+
+/**
+ * @description إنشاء دور جديد في النظام
+ * @route POST /api/roles
+ */
+export async function POST(request) {
+    try {
+        const body = await request.json();
+        const { name, name_ar, description, permissions = {} } = body;
+
+        if (!name || !name_ar) {
+            return NextResponse.json({ success: false, error: 'اسم الدور باللغة الإنجليزية والعربية مطلوب.' }, { status: 400 });
+        }
+
+        // التحقق من أن اسم الدور فريد
+        const existingRole = await db.query('SELECT id FROM roles WHERE name = $1', [name]);
+        if (existingRole.rowCount > 0) {
+            return NextResponse.json({ success: false, error: 'اسم الدور (باللغة الإنجليزية) موجود بالفعل.' }, { status: 409 });
+        }
+
+        const newRole = await db.query(
+            `INSERT INTO roles (name, name_ar, description, permissions, is_system_role)
+             VALUES ($1, $2, $3, $4, false)
+             RETURNING *`,
+            [name, name_ar, description, JSON.stringify(permissions)]
+        );
+
+        // لاحقاً: يمكن إضافة سجل في جدول التدقيق (audit log) هنا
+
+        return NextResponse.json({ success: true, role: newRole.rows[0] }, { status: 201 });
+
+    } catch (error) {
+        console.error('API_ROLES_POST_ERROR:', error);
+        return NextResponse.json({ success: false, error: 'حدث خطأ أثناء إنشاء الدور الجديد.' }, { status: 500 });
+    }
+}

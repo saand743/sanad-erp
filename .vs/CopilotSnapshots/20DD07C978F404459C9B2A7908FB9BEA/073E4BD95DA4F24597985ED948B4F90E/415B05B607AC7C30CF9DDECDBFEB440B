@@ -1,0 +1,115 @@
+﻿import { NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+import { logActivity } from '../../audit-log/service';
+
+// جلب المستخدم الحالي وصلاحياته (نفس المنطق الحالي)
+async function getCurrentUser(request) {
+  return {
+    id: 1,
+    name: 'Admin User',
+    role: 'admin',
+    permissions: {
+      suppliers: {
+        view: true,
+        create: true,
+        edit: true,
+        delete: true,
+        restore: true,
+        permanent_delete: true
+      }
+    }
+  };
+}
+
+export async function POST(request) {
+  try {
+    const body = await request.json();
+    const { action } = body;
+    const user = await getCurrentUser(request);
+
+    switch (action) {
+      case 'list':
+        return await handleList(body);
+      case 'create':
+        return await handleCreate(body, user);
+      case 'update':
+        return await handleUpdate(body, user);
+      case 'delete':
+        return await handleDelete(body, user);
+      case 'list_archived':
+        return await handleListArchived(body);
+      case 'restore':
+        return await handleRestore(body, user);
+      case 'permanent_delete':
+        return await handlePermanentDelete(body, user);
+      default:
+        return NextResponse.json({ success: false, error: 'الإجراء غير معروف' }, { status: 400 });
+    }
+  } catch (error) {
+    console.error('[API Suppliers Manage Error]', error);
+    return NextResponse.json({ success: false, error: 'حدث خطأ في الخادم' }, { status: 500 });
+  }
+}
+
+async function handleList(body) {
+  const { search = '', page = 1, limit = 10, sort_by = 'name', sort_order = 'ASC' } = body;
+  let where = 'WHERE deleted_at IS NULL';
+  let params = [];
+  if (search) {
+    where += ` AND (LOWER(name) LIKE $1 OR LOWER(phone) LIKE $1)`;
+    params.push(`%${search.toLowerCase()}%`);
+  }
+  const offset = (page - 1) * limit;
+  const query = `SELECT *, COUNT(*) OVER() AS total_count FROM suppliers ${where} ORDER BY ${sort_by} ${sort_order} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+  params.push(limit, offset);
+  const result = await db.query(query, params);
+  const totalRecords = result.rows[0]?.total_count || 0;
+  const total_pages = Math.ceil(totalRecords / limit);
+  return NextResponse.json({
+    success: true,
+    suppliers: result.rows,
+    pagination: {
+      current_page: page,
+      total_pages,
+      total_records: totalRecords,
+      limit,
+      has_next: page < total_pages,
+      has_previous: page > 1,
+    },
+  });
+}
+
+async function handleListArchived(body) {
+  const { search = '', page = 1, limit = 10, sort_by = 'name', sort_order = 'ASC' } = body;
+  let where = 'WHERE deleted_at IS NOT NULL';
+  let params = [];
+  if (search) {
+    where += ` AND (LOWER(name) LIKE $1 OR LOWER(phone) LIKE $1)`;
+    params.push(`%${search.toLowerCase()}%`);
+  }
+  const offset = (page - 1) * limit;
+  const query = `SELECT *, COUNT(*) OVER() AS total_count FROM suppliers ${where} ORDER BY ${sort_by} ${sort_order} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+  params.push(limit, offset);
+  const result = await db.query(query, params);
+  const totalRecords = result.rows[0]?.total_count || 0;
+  const total_pages = Math.ceil(totalRecords / limit);
+  return NextResponse.json({
+    success: true,
+    suppliers: result.rows,
+    pagination: {
+      current_page: page,
+      total_pages,
+      total_records: totalRecords,
+      limit,
+      has_next: page < total_pages,
+      has_previous: page > 1,
+    },
+  });
+}
+
+async function handleCreate(body, user) {
+  const { name, phone, email, address, credit_limit = 0, discount_rate = 0, opening_balance = 0, custom_fields = {} } = body;
+  if (!name) {
+    return NextResponse.json({ success: false, error: 'اسم المورد مطلوب' }, { status: 400 });
+  }
+  const

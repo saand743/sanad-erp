@@ -1,0 +1,41 @@
+﻿import { db } from '@/lib/db';
+import { NextResponse } from 'next/server';
+import jwt from 'jsonwebtoken';
+
+/**
+ * @description جلب بيانات المستخدم الحالي وصلاحياته بناءً على التوكن
+ * @route GET /api/auth/me
+ */
+export async function GET(request) {
+    try {
+        const authHeader = request.headers.get('authorization');
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return NextResponse.json({ success: false, error: 'Token not provided' }, { status: 401 });
+        }
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        if (!decoded.userId || !decoded.roleId) {
+            return NextResponse.json({ success: false, error: 'Invalid token payload' }, { status: 401 });
+        }
+
+        const userResult = await db.query('SELECT id, full_name, username, email, role_id FROM users WHERE id = $1', [decoded.userId]);
+        const roleResult = await db.query('SELECT name_ar, permissions FROM roles WHERE id = $1', [decoded.roleId]);
+
+        if (userResult.rowCount === 0 || roleResult.rowCount === 0) {
+            return NextResponse.json({ success: false, error: 'User or Role not found' }, { status: 404 });
+        }
+
+        const user = { ...userResult.rows[0], role_name: roleResult.rows[0].name_ar };
+        const permissions = roleResult.rows[0].permissions || {};
+
+        return NextResponse.json({ success: true, user, permissions });
+
+    } catch (error) {
+        if (error instanceof jwt.JsonWebTokenError) {
+            return NextResponse.json({ success: false, error: 'Invalid or expired token' }, { status: 401 });
+        }
+        console.error('API_ME_ERROR:', error);
+        return NextResponse.json({ success: false, error: 'Session validation failed' }, { status: 500 });
+    }
+}

@@ -1,0 +1,94 @@
+﻿import { NextResponse } from 'next/server';
+import { withAuth } from '@/lib/authMiddleware';
+import { db } from '@/lib/db';
+
+/**
+ * @description جلب قائمة فواتير الشراء من قاعدة البيانات
+ * @permission purchases.view
+ */
+async function getPurchaseInvoices(request) {
+    try {
+        const { searchParams } = new URL(request.url);
+        const page = parseInt(searchParams.get('page') || '1', 10);
+        const limit = parseInt(searchParams.get('limit') || '10', 10);
+        const offset = (page - 1) * limit;
+        const search = searchParams.get('search') || '';
+        let where = '';
+        let params = [];
+        let paramIndex = 1;
+        if (search) {
+            where = `WHERE invoice_number ILIKE $${paramIndex} OR supplier_name ILIKE $${paramIndex}`;
+            params.push(`%${search}%`);
+            paramIndex++;
+        }
+        const countResult = await db.query(`SELECT COUNT(*) FROM purchase_invoices ${where}`, params);
+        const total = parseInt(countResult.rows[0].count, 10);
+        const totalPages = Math.ceil(total / limit);
+        params.push(limit, offset);
+        const invoicesResult = await db.query(
+            `SELECT * FROM purchase_invoices ${where} ORDER BY invoice_date DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+            params
+        );
+        return NextResponse.json({
+            success: true,
+            invoices: invoicesResult.rows,
+            pagination: {
+                currentPage: page,
+                totalPages,
+                total,
+            },
+        });
+    } catch (error) {
+        console.error('API_PURCHASES_GET_ERROR:', error);
+        return NextResponse.json({ success: false, error: 'حدث خطأ أثناء جلب فواتير الشراء.' }, { status: 500 });
+    }
+}
+
+/**
+ * @description إنشاء فاتورة شراء جديدة في قاعدة البيانات
+ * @permission purchases.create
+ */
+async function createPurchaseInvoice(request) {
+    try {
+        const body = await request.json();
+        const { invoice_number, supplier_id, total_amount, invoice_date, items } = body;
+        if (!invoice_number || !supplier_id || !total_amount || !invoice_date || !Array.isArray(items) || items.length === 0) {
+            return NextResponse.json({ success: false, error: 'جميع بيانات الفاتورة مطلوبة' }, { status: 400 });
+        }
+        const client = await db.getClient();
+        try {
+            await client.query('BEGIN');
+            const invoiceResult = await client.query(
+                `INSERT INTO purchase_invoices (invoice_number, supplier_id, total_amount, invoice_date, status)
+                 VALUES ($1, $2, $3, $4, 'issued') RETURNING *`,
+                [invoice_number, supplier_id, total_amount, invoice_date]
+            );
+            const invoiceId = invoiceResult.rows[0].id;
+            for (const item of items) {
+                await client.query(
+                    `INSERT INTO purchase_invoice_items (purchase_invoice_id, product_id, quantity, unit_price, total_price)
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [invoiceId, item.product_id, item.quantity, item.unit_price, item.total_price]
+                );
+                // تحديث المخزون
+                await client.query(
+                    `UPDATE products SET current_stock = current_stock + $1 WHERE id = $2`,
+                    [item.quantity, item.product_id]
+                );
+            }
+            await client.query('COMMIT');
+            return NextResponse.json({ success: true, message: 'تم إنشاء فاتورة الشراء بنجاح.', invoiceId }, { status: 201 });
+        } catch (e) {
+            await client.query('ROLLBACK');
+            throw e;
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('API_PURCHASES_POST_ERROR:', error);
+        return NextResponse.json({ success: false, error: 'حدث خطأ أثناء إنشاء فاتورة الشراء.' }, { status: 500 });
+    }
+}
+
+export const GET = withAuth(getPurchaseInvoices, 'purchases.view');
+export const POST = withAuth(createPurchaseInvoice, 'purchases.create');

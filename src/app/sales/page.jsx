@@ -1,0 +1,224 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+import { FaPlus, FaEye, FaSpinner, FaLock, FaWhatsapp, FaFilePdf } from 'react-icons/fa';
+import useAuth from '@/hooks/useAuth';
+import AddSalesInvoiceModal from '@/components/sales/AddSalesInvoiceModal';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+function AccessDenied({ requiredPermission }) {
+    return (
+        <div className="flex flex-col items-center justify-center h-full p-12 bg-gray-50 rounded-lg text-center">
+            <FaLock className="text-5xl text-red-400 mb-4" />
+            <h2 className="text-2xl font-bold text-gray-800">وصول مرفوض</h2>
+            <p className="text-gray-600 mt-2">ليس لديك الصلاحيات اللازمة لعرض هذه الصفحة.</p>
+            {requiredPermission && (
+                <div className="mt-4 bg-red-100 text-red-700 text-sm font-mono p-2 rounded">
+                    الصلاحية المطلوبة: {requiredPermission}
+                </div>
+            )}
+        </div>
+    );
+}
+
+const translations = {
+  ar: {
+    title: 'إدارة المبيعات',
+    invoice: 'رقم الفاتورة',
+    customer: 'العميل',
+    total: 'الإجمالي',
+    actions: 'إجراءات',
+    print: 'طباعة حرارية',
+    whatsapp: 'إرسال عبر واتساب',
+    pdf: 'تصدير PDF',
+    view: 'عرض',
+    edit: 'تعديل',
+    delete: 'حذف',
+  },
+  en: {
+    title: 'Sales Management',
+    invoice: 'Invoice Number',
+    customer: 'Customer',
+    total: 'Total',
+    actions: 'Actions',
+    print: 'Thermal Print',
+    whatsapp: 'Send via WhatsApp',
+    pdf: 'Export PDF',
+    view: 'View',
+    edit: 'Edit',
+    delete: 'Delete',
+  }
+};
+
+export default function SalesPage() {
+    const { user, hasPermission, loading: authLoading, token } = useAuth();
+    const [invoices, setInvoices] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [chartData, setChartData] = useState([]);
+    const [language, setLanguage] = useState('ar');
+    const t = translations[language];
+
+    useEffect(() => {
+        if (!authLoading && hasPermission('sales.view')) {
+            fetchInvoices();
+            fetchSalesChart();
+        } else if (!authLoading) {
+            setLoading(false);
+        }
+    }, [authLoading, hasPermission, token]);
+
+    const fetchInvoices = async () => {
+        setLoading(true);
+        try {
+            const response = await fetch('/api/sales', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            if (data.success) {
+                setInvoices(data.invoices);
+            } else {
+                toast.error(data.error || 'فشل في جلب الفواتير.');
+            }
+        } catch (error) {
+            toast.error('خطأ في الشبكة عند جلب الفواتير.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchSalesChart = async () => {
+        try {
+            const response = await fetch('/api/reports/custom', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reportType: 'sales_summary', startDate: '', endDate: '' })
+            });
+            const data = await response.json();
+            if (data.success && data.report?.data) {
+                setChartData(data.report.data.map(row => ({
+                    name: row.invoice_date ? new Date(row.invoice_date).toLocaleDateString('ar-EG') : '',
+                    total: row.total_amount || 0
+                })));
+            }
+        } catch (error) {
+            // ignore chart error
+        }
+    };
+
+    const handleInvoiceAdded = () => {
+        fetchInvoices();
+        fetchSalesChart();
+    };
+
+    const handleThermalPrint = (invoice) => {
+        const printContent = document.getElementById(`invoice-${invoice.id}`).innerHTML;
+        const styles = `
+          <style>
+            body { font-family: monospace; direction: rtl; }
+            .thermal { width: 300px; font-size: 13px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { padding: 2px 4px; text-align: right; }
+            th { border-bottom: 1px dashed #333; }
+            .center { text-align: center; }
+          </style>
+        `;
+        const win = window.open('', 'thermalPrint', 'width=350,height=600');
+        win.document.write(`${styles}<div class='thermal'>${printContent}</div>`);
+        win.print();
+        win.close();
+    };
+
+    const handleSendWhatsApp = (invoice) => {
+        const url = window.location.origin + `/api/sales/invoice-pdf/${invoice.id}`;
+        const message = encodeURIComponent(`فاتورتك رقم ${invoice.invoice_number}\nرابط الفاتورة: ${url}`);
+        window.open(`https://wa.me/?text=${message}`, '_blank');
+    };
+
+    if (authLoading || loading) {
+        return <div className="flex justify-center items-center h-96"><FaSpinner className="animate-spin text-4xl text-blue-500" /></div>;
+    }
+
+    if (!hasPermission('sales.view')) {
+        return <div className="p-6"><AccessDenied requiredPermission="sales.view" /></div>;
+    }
+
+    return (
+        <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center mb-4">
+                <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
+                {hasPermission('sales.create') && (
+                    <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2" onClick={() => setShowAddModal(true)}>
+                        <FaPlus /><span>فاتورة جديدة</span>
+                    </button>
+                )}
+                <select value={language} onChange={e => setLanguage(e.target.value)} className="border rounded px-3 py-2">
+                    <option value="ar">العربية</option>
+                    <option value="en">English</option>
+                </select>
+            </div>
+
+            {/* قسم الرسم البياني */}
+            <div className="bg-white rounded-lg shadow p-6 mb-6">
+                <h3 className="font-bold mb-4">إجمالي المبيعات حسب التاريخ</h3>
+                <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip formatter={(value) => `${Number(value).toLocaleString()} ج.م`} />
+                        <Bar dataKey="total" fill="#3b82f6" name="إجمالي المبيعات" />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+
+            <div className="bg-white rounded-lg shadow overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.invoice}</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.customer}</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.total}</th>
+                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">{t.actions}</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {invoices.map((invoice) => (
+                            <tr key={invoice.id}>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{invoice.invoice_number}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{invoice.customer_name}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{Number(invoice.total_amount).toLocaleString()} ج.م</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-center flex gap-2 justify-center">
+                                    <button className="text-blue-600 hover:text-blue-800" title={t.view}><FaEye /></button>
+                                    <button className="text-green-600 hover:text-green-800" title={t.edit}><FaEdit /></button>
+                                    <button className="text-red-600 hover:text-red-800" title={t.delete}><FaTrash /></button>
+                                    <button className="text-gray-600 hover:text-gray-800" title={t.print} onClick={() => handleThermalPrint(invoice)}><FaPrint /></button>
+                                    <button className="text-gray-600 hover:text-gray-800" title={t.whatsapp} onClick={() => handleSendWhatsApp(invoice)}><FaWhatsapp /></button>
+                                    <button className="text-gray-600 hover:text-gray-800" title={t.pdf}><FaFilePdf /></button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            <AddSalesInvoiceModal
+                isOpen={showAddModal}
+                onClose={() => setShowAddModal(false)}
+                onInvoiceAdded={handleInvoiceAdded}
+                getAuthHeaders={() => ({ 'Authorization': `Bearer ${token}` })}
+            />
+
+            {/* إضافة عنصر مخفي لطباعة الفاتورة الحرارية */}
+            {invoices.map((invoice) => (
+                <div key={invoice.id} id={`invoice-${invoice.id}`} style={{ display: 'none' }}>
+                    <div className="center">فاتورة رقم {invoice.invoice_number}</div>
+                    <div>العميل: {invoice.customer_name}</div>
+                    <div>الإجمالي: {Number(invoice.total_amount).toLocaleString()} ج.م</div>
+                    {/* يمكن إضافة تفاصيل المنتجات هنا */}
+                </div>
+            ))}
+        </div>
+    );
+}

@@ -1,0 +1,61 @@
+﻿import { NextResponse } from 'next/server';
+import { withAuth } from '@/lib/authMiddleware';
+import { db } from '@/lib/db';
+
+/**
+ * @description جلب قائمة فواتير الشراء
+ * @permission purchases.view
+ */
+async function getPurchaseInvoices(request) {
+    try {
+        // في التطبيق الحقيقي، ستقوم بجلب البيانات من قاعدة البيانات
+        // مع دعم للترقيم والفلترة.
+        const { searchParams } = new URL(request.url);
+        const page = searchParams.get('page') || 1;
+        const limit = searchParams.get('limit') || 10;
+        const offset = (page - 1) * limit;
+
+        // بيانات وهمية مؤقتاً
+        const mockInvoices = [
+            { id: 1, invoice_number: 'PUR-001', supplier_name: 'المورد الأول', total_amount: 1500, invoice_date: '2023-10-01', status: 'paid' },
+            { id: 2, invoice_number: 'PUR-002', supplier_name: 'المورد الثاني', total_amount: 3250, invoice_date: '2023-10-05', status: 'pending' },
+        ];
+        const total_count = mockInvoices.length;
+
+        return NextResponse.json({
+            success: true,
+            invoices: mockInvoices,
+            pagination: {
+                current_page: parseInt(page),
+                total_pages: Math.ceil(total_count / limit),
+                total_count: total_count,
+            }
+        });
+    } catch (error) {
+        console.error('API_PURCHASES_GET_ERROR:', error);
+        return NextResponse.json({ success: false, error: 'حدث خطأ أثناء جلب فواتير الشراء.' }, { status: 500 });
+    }
+}
+
+/**
+ * @description إنشاء فاتورة شراء جديدة
+ * @permission purchases.create
+ */
+async function createPurchaseInvoice(request) {
+    try {
+        const body = await request.json();
+        // هنا يمكنك إضافة منطق لإدخال فاتورة الشراء الجديدة في قاعدة البيانات
+        console.log('إنشاء فاتورة شراء بالبيانات:', body);
+        
+        const newInvoice = { id: Math.floor(Math.random() * 1000), ...body };
+        
+        return NextResponse.json({ success: true, message: 'تم إنشاء فاتورة الشراء بنجاح.', invoice: newInvoice }, { status: 201 });
+    } catch (error) {
+        console.error('API_PURCHASES_POST_ERROR:', error);
+        return NextResponse.json({ success: false, error: 'حدث خطأ أثناء إنشاء فاتورة الشراء.' }, { status: 500 });
+    }
+}
+
+// تصدير الدوال المحمية بالصلاحيات المطلوبة
+export const GET = withAuth(getPurchaseInvoices, 'purchases.view');
+export const POST = withAuth(createPurchaseInvoice, 'purchases.create');

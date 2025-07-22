@@ -1,0 +1,150 @@
+﻿import { NextResponse } from 'next/server';
+import { logActivity } from '../../audit-log/service';
+
+// --- Mock Database ---
+let mockRoles = [
+    { id: 1, name: 'admin', name_ar: 'مدير النظام', description: 'صلاحية كاملة على النظام', is_system_role: true, permissions: { all: true }, created_at: new Date().toISOString() },
+    { id: 2, name: 'accountant', name_ar: 'محاسب', description: 'صلاحية على الوحدات المحاسبية', is_system_role: false, permissions: { sales: { view: true, create: true }, customers: { view: true }, reports: { view: true }, purchases: { view: true } }, created_at: new Date().toISOString() },
+    { id: 3, name: 'salesperson', name_ar: 'مندوب مبيعات', description: 'صلاحية على المبيعات والعملاء فقط', is_system_role: false, permissions: { sales: { view: true, create: true }, customers: { view: true } }, created_at: new Date().toISOString() },
+];
+
+let mockUsers = [
+    { id: 1, full_name: 'Admin User', email: 'admin@example.com', role_id: 1 },
+    { id: 2, full_name: 'Accountant User', email: 'accountant@example.com', role_id: 2 },
+    { id: 3, full_name: 'Sales User', email: 'sales@example.com', role_id: 3 },
+];
+
+// --- Mock Current User ---
+async function getCurrentUser(request) {
+    // في تطبيق حقيقي، يتم فك تشفير التوكن هنا
+    return { id: 1, name: 'Admin User', permissions: { roles: { view: true, create: true, edit: true, delete: true, assign: true }, users: { view: true } } };
+}
+
+// --- Main Handler ---
+export async function POST(request) {
+    try {
+        const body = await request.json();
+        const { action } = body;
+        const user = await getCurrentUser(request);
+
+        switch (action) {
+            case 'list_roles':
+                if (!user.permissions?.roles?.view) return NextResponse.json({ success: false, error: 'غير مصرح لك بعرض الأدوار' }, { status: 403 });
+                return handleListRoles();
+            case 'list_users':
+                 if (!user.permissions?.users?.view) return NextResponse.json({ success: false, error: 'غير مصرح لك بعرض المستخدمين' }, { status: 403 });
+                return handleListUsers();
+            case 'create_role':
+                if (!user.permissions?.roles?.create) return NextResponse.json({ success: false, error: 'غير مصرح لك بإنشاء الأدوار' }, { status: 403 });
+                return await handleCreateRole(body, user);
+            case 'update_permissions':
+                if (!user.permissions?.roles?.edit) return NextResponse.json({ success: false, error: 'غير مصرح لك بتعديل الأدوار' }, { status: 403 });
+                return await handleUpdatePermissions(body, user);
+            case 'assign_user':
+                if (!user.permissions?.roles?.assign) return NextResponse.json({ success: false, error: 'غير مصرح لك بربط المستخدمين' }, { status: 403 });
+                return await handleAssignUserToRole(body, user);
+            case 'delete_role':
+                if (!user.permissions?.roles?.delete) return NextResponse.json({ success: false, error: 'غير مصرح لك بحذف الأدوار' }, { status: 403 });
+                return await handleDeleteRole(body, user);
+            default:
+                return NextResponse.json({ success: false, error: 'الإجراء غير معروف' }, { status: 400 });
+        }
+    } catch (error) {
+        console.error('[API Roles Error]', error);
+        return NextResponse.json({ success: false, error: 'حدث خطأ في الخادم: ' + error.message }, { status: 500 });
+    }
+}
+
+// --- Action Handlers ---
+function handleListRoles() {
+    const rolesWithUserCount = mockRoles.map(role => ({
+        ...role,
+        users_count: mockUsers.filter(u => u.role_id === role.id).length
+    }));
+    return NextResponse.json({ success: true, roles: rolesWithUserCount });
+}
+
+function handleListUsers() {
+    const usersWithRoles = mockUsers.map(user => {
+        const role = mockRoles.find(r => r.id === user.role_id);
+        return { ...user, role_name: role ? role.name_ar : 'لا يوجد دور' };
+    });
+    return NextResponse.json({ success: true, users: usersWithRoles });
+}
+
+async function handleCreateRole(body, user) {
+    const { name, name_ar, description, permissions } = body;
+    if (!name || !name_ar) {
+        return NextResponse.json({ success: false, error: 'اسم الدور باللغتين مطلوب' }, { status: 400 });
+    }
+
+    const newRole = {
+        id: mockRoles.length > 0 ? Math.max(...mockRoles.map(r => r.id)) + 1 : 1,
+        name,
+        name_ar,
+        description,
+        permissions: permissions || {},
+        is_system_role: false,
+        created_at: new Date().toISOString(),
+    };
+    mockRoles.push(newRole);
+
+    await logActivity({
+        user_id: user.id,
+        user_name: user.name,
+        action: 'CREATE_ROLE',
+        entity_type: 'Role',
+        entity_id: newRole.id,
+        details: `إنشاء دور جديد: ${name_ar}`
+    });
+
+    return NextResponse.json({ success: true, message: 'تم إنشاء الدور بنجاح', role: newRole });
+}
+
+async function handleUpdatePermissions(body, user) {
+    const { roleId, permissions } = body;
+    const roleIndex = mockRoles.findIndex(r => r.id == roleId);
+    if (roleIndex === -1) {
+        return NextResponse.json({ success: false, error: 'الدور غير موجود' }, { status: 404 });
+    }
+
+    mockRoles[roleIndex].permissions = permissions;
+
+    await logActivity({
+        user_id: user.id,
+        user_name: user.name,
+        action: 'UPDATE_ROLE_PERMISSIONS',
+        entity_type: 'Role',
+        entity_id: roleId,
+        details: `تحديث صلاحيات الدور: ${mockRoles[roleIndex].name_ar}`
+    });
+
+    return NextResponse.json({ success: true, message: 'تم تحديث الصلاحيات بنجاح' });
+}
+
+async function handleAssignUserToRole(body, user) {
+    const { userId, roleId } = body;
+    const userIndex = mockUsers.findIndex(u => u.id == userId);
+    if (userIndex === -1) {
+        return NextResponse.json({ success: false, error: 'المستخدم غير موجود' }, { status: 404 });
+    }
+    const roleExists = mockRoles.some(r => r.id == roleId);
+    if (!roleExists) {
+        return NextResponse.json({ success: false, error: 'الدور غير موجود' }, { status: 404 });
+    }
+
+    mockUsers[userIndex].role_id = parseInt(roleId);
+    
+    const roleName = mockRoles.find(r => r.id == roleId).name_ar;
+    const userName = mockUsers[userIndex].full_name;
+
+    await logActivity({
+        user_id: user.id,
+        user_name: user.name,
+        action: 'ASSIGN_ROLE_TO_USER',
+        entity_type: 'User',
+        entity_id: userId,
+        details: `ربط المستخدم '${userName}' بالدور '${roleName}'`
+    });
+
+    return NextResponse.json({ success: true, message: 'تم رب

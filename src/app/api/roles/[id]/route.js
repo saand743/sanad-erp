@@ -1,0 +1,79 @@
+import { db } from '@/lip/db';
+import { NextResponse } from 'next/server';
+
+/**
+ * @description تحديث دور موجود في النظام
+ * @route PUT /api/roles/[id]
+ */
+export async function PUT(request, { params }) {
+    try {
+        const { id } = params;
+        const body = await request.json();
+        const { name, name_ar, description, permissions } = body;
+
+        if (!name || !name_ar) {
+            return NextResponse.json({ success: false, error: 'اسم الدور باللغة الإنجليزية والعربية مطلوب.' }, { status: 400 });
+        }
+
+        // التحقق من أنه ليس دور نظام
+        const roleCheck = await db.query('SELECT is_system_role FROM roles WHERE id = $1', [id]);
+        if (roleCheck.rowCount > 0 && roleCheck.rows[0].is_system_role) {
+            return NextResponse.json({ success: false, error: 'لا يمكن تعديل الأدوار النظامية.' }, { status: 403 });
+        }
+
+        const updatedRole = await db.query(
+            `UPDATE roles
+             SET name = $1, name_ar = $2, description = $3, permissions = $4, updated_at = NOW()
+             WHERE id = $5
+             RETURNING *`,
+            [name, name_ar, description, JSON.stringify(permissions || {}), id]
+        );
+
+        if (updatedRole.rowCount === 0) {
+            return NextResponse.json({ success: false, error: 'الدور غير موجود.' }, { status: 404 });
+        }
+
+        return NextResponse.json({ success: true, role: updatedRole.rows[0] });
+
+    } catch (error) {
+        console.error('API_ROLES_PUT_ERROR:', error);
+        if (error.code === '23505') { // unique_violation
+            return NextResponse.json({ success: false, error: 'اسم الدور (باللغة الإنجليزية) موجود بالفعل.' }, { status: 409 });
+        }
+        return NextResponse.json({ success: false, error: 'حدث خطأ أثناء تحديث الدور.' }, { status: 500 });
+    }
+}
+
+/**
+ * @description حذف دور من النظام
+ * @route DELETE /api/roles/[id]
+ */
+export async function DELETE(request, { params }) {
+    try {
+        const { id } = params;
+
+        // التحقق من أنه ليس دور نظام
+        const roleCheck = await db.query('SELECT is_system_role FROM roles WHERE id = $1', [id]);
+        if (roleCheck.rowCount > 0 && roleCheck.rows[0].is_system_role) {
+            return NextResponse.json({ success: false, error: 'لا يمكن حذف الأدوار النظامية.' }, { status: 403 });
+        }
+
+        // التحقق من أن الدور غير مرتبط بأي مستخدم
+        const userCheck = await db.query('SELECT id FROM users WHERE role_id = $1 LIMIT 1', [id]);
+        if (userCheck.rowCount > 0) {
+            return NextResponse.json({ success: false, error: 'لا يمكن حذف الدور لوجود مستخدمين مرتبطين به.' }, { status: 400 });
+        }
+
+        const deletedRole = await db.query('DELETE FROM roles WHERE id = $1', [id]);
+
+        if (deletedRole.rowCount === 0) {
+            return NextResponse.json({ success: false, error: 'الدور غير موجود.' }, { status: 404 });
+        }
+
+        return NextResponse.json({ success: true, message: 'تم حذف الدور بنجاح.' });
+
+    } catch (error) {
+        console.error('API_ROLES_DELETE_ERROR:', error);
+        return NextResponse.json({ success: false, error: 'حدث خطأ أثناء حذف الدور.' }, { status: 500 });
+    }
+}

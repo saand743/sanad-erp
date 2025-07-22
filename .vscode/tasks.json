@@ -1,0 +1,12 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "shell",
+      "label": "إنشاء مجلدات components وapi وutilities في src الجذري إذا لم تكن موجودة",
+      "command": "$folders = @(\u0027components\u0027,\u0027api\u0027,\u0027utilities\u0027)\nforeach ($folder in $folders) {\n  $path = \"H:\\possss\\main-project\\src\\$folder\"\n  if (-not (Test-Path $path)) {\n    New-Item -Path $path -ItemType Directory\n  }\n}",
+      "explanation": "إنشاء مجلدات components وapi وutilities في src الجذري إذا لم تكن موجودة.",
+      "isBackground": false
+    }
+  ]
+}

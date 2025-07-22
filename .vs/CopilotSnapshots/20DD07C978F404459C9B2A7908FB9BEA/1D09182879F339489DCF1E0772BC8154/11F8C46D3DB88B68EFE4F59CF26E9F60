@@ -1,0 +1,27 @@
+﻿version: '3.8'
+services:
+  app:
+    build: .
+    container_name: sanad-erp-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/sanad_erp
+    depends_on:
+      - db
+    restart: always
+  db:
+    image: postgres:15
+    container_name: sanad-erp-db
+    environment:
+      POSTGRES_DB: sanad_erp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - sanad-erp-db-data:/var/lib/postgresql/data
+    restart: always
+volumes:
+  sanad-erp-db-data:

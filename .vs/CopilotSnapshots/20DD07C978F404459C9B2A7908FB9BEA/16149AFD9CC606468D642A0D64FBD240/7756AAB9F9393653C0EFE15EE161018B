@@ -1,0 +1,122 @@
+﻿'use client';
+
+import React, { useState } from 'react';
+import toast from 'react-hot-toast';
+
+export default function AddProductModal({ isOpen, onClose, onProductAdded, getAuthHeaders }) {
+  const [formData, setFormData] = useState({
+    name: '',
+    product_code: '',
+    description: '',
+    purchase_price: '',
+    sale_price: '',
+    current_stock: 0,
+  });
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      product_code: '',
+      description: '',
+      purchase_price: '',
+      sale_price: '',
+      current_stock: 0,
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.name || !formData.product_code || !formData.purchase_price || !formData.sale_price) {
+      return toast.error('يرجى ملء جميع الحقول الإلزامية (*).');
+    }
+
+    setLoading(true);
+    const toastId = toast.loading('جاري إضافة المنتج...');
+
+    try {
+      const headers = getAuthHeaders();
+      const response = await fetch('/api/products', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            ...formData,
+            purchase_price: parseFloat(formData.purchase_price),
+            sale_price: parseFloat(formData.sale_price),
+            current_stock: parseInt(formData.current_stock, 10) || 0,
+        }),
+      });
+      const data = await response.json();
+      toast.dismiss(toastId);
+
+      if (data.success) {
+        toast.success('تمت إضافة المنتج بنجاح!');
+        resetForm();
+        onProductAdded();
+        onClose();
+      } else {
+        toast.error(data.error || 'فشل في إضافة المنتج.');
+      }
+    } catch (error) {
+      toast.dismiss(toastId);
+      console.error('Add product error:', error);
+      toast.error('حدث خطأ في الشبكة.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
+      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl">
+        <div className="flex justify-between items-center mb-6 border-b pb-4">
+          <h2 className="text-2xl font-bold text-gray-800">إضافة منتج جديد</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4" dir="rtl">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 text-right">اسم المنتج *</label>
+              <input id="name" name="name" type="text" value={formData.name} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
+            </div>
+            <div>
+              <label htmlFor="product_code" className="block text-sm font-medium text-gray-700 text-right">كود المنتج (SKU) *</label>
+              <input id="product_code" name="product_code" type="text" value={formData.product_code} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700 text-right">الوصف</label>
+            <textarea id="description" name="description" value={formData.description} onChange={handleChange} rows="3" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label htmlFor="purchase_price" className="block text-sm font-medium text-gray-700 text-right">سعر الشراء *</label>
+              <input id="purchase_price" name="purchase_price" type="number" value={formData.purchase_price} onChange={handleChange} required min="0" step="0.01" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
+            </div>
+            <div>
+              <label htmlFor="sale_price" className="block text-sm font-medium text-gray-700 text-right">سعر البيع *</label>
+              <input id="sale_price" name="sale_price" type="number" value={formData.sale_price} onChange={handleChange} required min="0" step="0.01" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
+            </div>
+            <div>
+              <label htmlFor="current_stock" className="block text-sm font-medium text-gray-700 text-right">الرصيد الافتتاحي</label>
+              <input id="current_stock" name="current_stock" type="number" value={formData.current_stock} onChange={handleChange} min="0" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
+            </div>
+          </div>
+          <div className="flex justify-end space-x-2 space-x-reverse pt-6 border-t">
+            <button type="button" onClick={onClose} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">إلغاء</button>
+            <button type="submit" disabled={loading} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400">
+              {loading ? 'جاري الإضافة...' : 'إضافة المنتج'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

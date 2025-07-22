@@ -1,0 +1,64 @@
+﻿import React, { useState } from 'react';
+
+export default function SettingsPage() {
+  const [settings, setSettings] = useState({
+    language: 'ar',
+    currency: 'EGP',
+    paypalClientId: '',
+    stripePublicKey: '',
+    quickbooksToken: '',
+    xeroToken: '',
+  });
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setSettings((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    // هنا يمكن ربط الإعدادات بقاعدة البيانات أو ملف إعدادات
+    alert('تم حفظ الإعدادات بنجاح!');
+  };
+
+  return (
+    <div className="p-6 max-w-2xl mx-auto space-y-6">
+      <h1 className="text-2xl font-bold text-gray-900 mb-4">إعدادات النظام العامة</h1>
+      <form onSubmit={handleSave} className="space-y-4 bg-white rounded-lg shadow p-6">
+        <div>
+          <label className="block mb-1">اللغة الافتراضية</label>
+          <select name="language" value={settings.language} onChange={handleChange} className="border rounded px-3 py-2 w-full">
+            <option value="ar">العربية</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+        <div>
+          <label className="block mb-1">العملة الافتراضية</label>
+          <select name="currency" value={settings.currency} onChange={handleChange} className="border rounded px-3 py-2 w-full">
+            <option value="EGP">جنيه مصري (EGP)</option>
+            <option value="SAR">ريال سعودي (SAR)</option>
+            <option value="USD">دولار أمريكي (USD)</option>
+            <option value="EUR">يورو (EUR)</option>
+          </select>
+        </div>
+        <div>
+          <label className="block mb-1">PayPal Client ID</label>
+          <input name="paypalClientId" value={settings.paypalClientId} onChange={handleChange} className="border rounded px-3 py-2 w-full" />
+        </div>
+        <div>
+          <label className="block mb-1">Stripe Public Key</label>
+          <input name="stripePublicKey" value={settings.stripePublicKey} onChange={handleChange} className="border rounded px-3 py-2 w-full" />
+        </div>
+        <div>
+          <label className="block mb-1">QuickBooks Token</label>
+          <input name="quickbooksToken" value={settings.quickbooksToken} onChange={handleChange} className="border rounded px-3 py-2 w-full" />
+        </div>
+        <div>
+          <label className="block mb-1">Xero Token</label>
+          <input name="xeroToken" value={settings.xeroToken} onChange={handleChange} className="border rounded px-3 py-2 w-full" />
+        </div>
+        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">حفظ الإعدادات</button>
+      </form>
+    </div>
+  );
+}

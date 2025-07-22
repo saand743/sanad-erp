@@ -1,0 +1,32 @@
+﻿import { NextResponse } from 'next/server';
+import { withAuth } from '@/lib/authMiddleware';
+
+/**
+ * @description جلب قائمة فواتير المبيعات
+ * @permission sales.view
+ */
+async function getSalesInvoices(request) {
+    // هنا يمكنك كتابة منطق جلب الفواتير من قاعدة البيانات
+    // request.user يحتوي على بيانات المستخدم المصادق عليه
+    const mockInvoices = [
+        { id: 1, invoice_number: 'INV-001', customer_name: 'العميل الأول', total: 500 },
+        { id: 2, invoice_number: 'INV-002', customer_name: 'العميل الثاني', total: 1200 },
+    ];
+    return NextResponse.json({ success: true, invoices: mockInvoices });
+}
+
+/**
+ * @description إنشاء فاتورة مبيعات جديدة
+ * @permission sales.create
+ */
+async function createSalesInvoice(request) {
+    const body = await request.json();
+    // هنا يمكنك كتابة منطق حفظ الفاتورة في قاعدة البيانات
+    console.log('Creating invoice with data:', body);
+    return NextResponse.json({ success: true, message: 'تم إنشاء الفاتورة بنجاح.', invoiceId: 101 }, { status: 201 });
+}
+
+// تصدير الدوال المحمية
+// لاحظ كيف نمرر الصلاحية المطلوبة لكل دالة
+export const GET = withAuth(getSalesInvoices, 'sales.view');
+export const POST = withAuth(createSalesInvoice, 'sales.create');
